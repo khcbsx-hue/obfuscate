@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @plugin "daisyui" {
-  themes: light, dark --default --prefersdark;
+  themes: light, dark --default;
 }
 
 @plugin "daisyui/theme" {
@@ -53,4 +53,9 @@ html, body, #root {
   width: 100vw;
   display: flex;
   flex-direction: column;
+}
+
+:root, [data-theme] {
+  background-color: #000000 !important;
+  color: #e2e8f0 !important;
 }
