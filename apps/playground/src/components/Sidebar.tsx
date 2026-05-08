@@ -2,6 +2,7 @@ import { createEffect, createSignal, Show } from 'solid-js';
 import { config, setConfig } from '../App';
 import { useDeobfuscateContext } from '../context/DeobfuscateContext';
 import FileTree from './FileTree';
+import AiRenameModal from './AiRenameModal';
 
 interface Props {
   paths: string[];
@@ -17,6 +18,7 @@ export default function Sidebar(props: Props) {
   const [mangleMode, setMangleMode] = createSignal<MangleMode>('off');
   const [mangleString, setMangleString] = createSignal<string>('');
   const [mangleFlags, setMangleFlags] = createSignal<string>('');
+  const [showAiModal, setShowAiModal] = createSignal(false);
 
   createEffect(() => {
     if (mangleMode() === 'off') {
@@ -69,6 +71,27 @@ export default function Sidebar(props: Props) {
             <span class="loading loading-spinner"></span>Cancel
           </button>
         </Show>
+         {/* Nút AI Rename — mới thêm */}
+  <button
+    class="btn btn-secondary w-full px-4"
+    title="AI Rename Variables"
+    onClick={() => setShowAiModal(true)}
+  >
+    <svg
+      width="22" height="22" viewBox="0 0 24 24"
+      stroke-width="1.5" stroke="currentColor"
+      fill="none" stroke-linecap="round" stroke-linejoin="round"
+    >
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 2a2 2 0 0 1 2 2v1a2 2 0 0 1 -2 2a2 2 0 0 1 2 2v1a2 2 0 0 1 -2 2" />
+      <path d="M3 7h3" />
+      <path d="M3 12h3" />
+      <path d="M10 7v10" />
+      <path d="M14 7h3a2 2 0 0 1 0 4h-3" />
+      <path d="M14 11h1l3 6" />
+    </svg>
+    <span class="hidden sm:inline">AI Rename</span>
+  </button>
       </div>
 
       <label class="label cursor-pointer px-4 py-2 hover:bg-base-100 group text-base-content">
@@ -277,6 +300,13 @@ export default function Sidebar(props: Props) {
         paths={props.paths}
         onFileClick={(node) => props.onFileClick?.(node.path)}
       />
+
+      {/* AI Rename Modal */}
+  <AiRenameModal
+    open={showAiModal()}
+    onClose={() => setShowAiModal(false)}
+  />
+      
     </nav>
   );
 }
