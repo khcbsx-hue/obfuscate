@@ -218,25 +218,6 @@ function App() {
       onResult={onDeobfuscateResult}
     >
       <ProgressBar />
-      <Menu
-        onFileOpen={(content) => {
-          openUntitledTab().setValue(content);
-        }}
-        onLoadFromURL={(url) => {
-          loadFromURL(url).catch(console.error);
-        }}
-        onSave={() => {
-          if (activeTab()) downloadFile(activeTab()!);
-        }}
-        onSaveAll={() => {
-          import('./utils/zip.js')
-            .then((module) => module.downloadModelsZIP(models()))
-            .catch(console.error);
-        }}
-        onRestore={(workspace) => {
-          restoreWorkspace(workspace).catch(console.error);
-        }}
-      />
       {/* Page */}
       <div class="flex flex-1 overflow-hidden">
         <Sidebar paths={filePaths()} onFileClick={openFile} />
