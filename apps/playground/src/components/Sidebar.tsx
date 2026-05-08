@@ -41,58 +41,52 @@ export default function Sidebar(props: Props) {
 
   return (
     <nav class="flex flex-col w-12 sm:w-72 bg-base-200">
-      <div class="flex justify-center py-4">
-        <Show
-          when={deobfuscating()}
-          fallback={
-            <button
-              class="btn btn-primary"
-              title="Start [Alt+Enter]"
-              onClick={deobfuscate}
-            >
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                fill="none"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                <path d="M7 4v16l13 -8z" />
-              </svg>
-              <span class="hidden sm:inline">Start</span>
-            </button>
-          }
+        <div class="flex flex-col items-center gap-2 py-4 px-2">
+  <Show
+    when={deobfuscating()}
+    fallback={
+      <button
+        class="btn btn-primary w-full"
+        title="Start [Alt+Enter]"
+        onClick={deobfuscate}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24"
+          stroke-width="1.5" stroke="currentColor"
+          fill="none" stroke-linecap="round" stroke-linejoin="round"
         >
-          <button class="btn btn-error btn-outline" onClick={cancelDeobfuscate}>
-            <span class="loading loading-spinner"></span>Cancel
-          </button>
-        </Show>
-         {/* Nút AI Rename — mới thêm */}
+          <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+          <path d="M7 4v16l13 -8z" />
+        </svg>
+        <span class="hidden sm:inline">Start</span>
+      </button>
+    }
+  >
+    <button class="btn btn-error btn-outline w-full" onClick={cancelDeobfuscate}>
+      <span class="loading loading-spinner"></span>
+      <span class="hidden sm:inline">Cancel</span>
+    </button>
+  </Show>
+
   <button
-    class="btn btn-secondary w-full px-4"
+    class="btn btn-secondary w-full"
     title="AI Rename Variables"
     onClick={() => setShowAiModal(true)}
   >
-    <svg
-      width="22" height="22" viewBox="0 0 24 24"
+    <svg width="20" height="20" viewBox="0 0 24 24"
       stroke-width="1.5" stroke="currentColor"
       fill="none" stroke-linecap="round" stroke-linejoin="round"
     >
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-      <path d="M12 2a2 2 0 0 1 2 2v1a2 2 0 0 1 -2 2a2 2 0 0 1 2 2v1a2 2 0 0 1 -2 2" />
-      <path d="M3 7h3" />
-      <path d="M3 12h3" />
-      <path d="M10 7v10" />
-      <path d="M14 7h3a2 2 0 0 1 0 4h-3" />
-      <path d="M14 11h1l3 6" />
+      <path d="M4 20l3 -3" />
+      <path d="M4.5 12.5l8 -8l.5 .5" />
+      <path d="M5 13l6.5 -6.5l5.5 5.5l-6.5 6.5z" />
+      <path d="M12 6l2.5 2.5" />
+      <path d="M20 21l-2 -2" />
+      <path d="M16 16l4 4" />
     </svg>
     <span class="hidden sm:inline">AI Rename</span>
   </button>
-      </div>
+</div>
 
       <label class="label cursor-pointer px-4 py-2 hover:bg-base-100 group text-base-content">
         <svg
