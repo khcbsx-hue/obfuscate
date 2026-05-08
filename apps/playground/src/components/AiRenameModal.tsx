@@ -15,12 +15,12 @@ export default function AiRenameModal(props: Props) {
     <Show when={props.open}>
       {/* Backdrop */}
       <div
-        class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
+        class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm"
         onClick={props.onClose}
       >
         {/* Modal box */}
         <div
-          class="bg-base-200 border border-base-300 rounded-xl w-full max-w-md mx-4 p-6 flex flex-col gap-5 shadow-2xl"
+          class="bg-[#2a2a2e] border border-[#444] rounded-xl w-full max-w-md mx-4 p-6 flex flex-col gap-5 shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
 
