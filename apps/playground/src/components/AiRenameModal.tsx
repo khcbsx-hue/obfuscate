@@ -52,6 +52,7 @@ export default function AiRenameModal(props: Props) {
                   { value: 'claude', label: '🟣 Claude (Anthropic)', desc: 'claude-3-5-haiku' },
                   { value: 'openai', label: '🟢 GPT (OpenAI)', desc: 'gpt-4o-mini' },
                   { value: 'gemini', label: '🔵 Gemini (Google)', desc: 'gemini-1.5-flash' },
+                  { value: 'groq', label: '🟡 Groq (miễn phí)', desc: 'llama-3.3-70b' },
                 ] as const
               ).map((item) => (
                 <label class={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
