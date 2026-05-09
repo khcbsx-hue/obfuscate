@@ -9,11 +9,12 @@ interface Props {
 
 export default function AiRenameModal(props: Props) {
   const [provider, setProvider] = createSignal<'claude' | 'openai' | 'gemini' | 'groq'>('gemini');
-  const [apiKey, setApiKey] = createSignal('');
+  const [apiKeys, setApiKeys] = createSignal<string[]>(['']);
   const [showKey, setShowKey] = createSignal(false);
   const [saveKey, setSaveKey] = createSignal(true);
   const savedKey = getApiKey(provider());
-  if (savedKey) setApiKey(savedKey);
+  if (savedKey) setApiKeys(savedKey.split(',').map(k => 
+  k.trim()).filter(Boolean).concat(['']));
 
   return (
     <Show when={props.open}>
@@ -76,35 +77,58 @@ export default function AiRenameModal(props: Props) {
           </div>
 
           {/* API Key input */}
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-base-content/70">
-              API Key:
-            </label>
-            <div class="flex gap-2">
-              <input
-                type={showKey() ? 'text' : 'password'}
-                class="input input-bordered flex-1 font-mono text-sm"
-                placeholder={
-                  provider() === 'claude'
-                    ? 'sk-ant-...'
-                    : provider() === 'openai'
-                    ? 'sk-...'
-                    : provider() === 'groq'
-                    ? 'gsk_...'
-                    : 'AIza...'
-                }
-                value={apiKey()}
-                onInput={(e) => setApiKey(e.currentTarget.value)}
-              />
-              <button
-                class="btn btn-ghost btn-square"
-                title={showKey() ? 'Ẩn key' : 'Hiện key'}
-                onClick={() => setShowKey(!showKey())}
-              >
-                {showKey() ? '🙈' : '👁'}
-              </button>
-            </div>
-          </div>
+<div class="flex flex-col gap-2">
+  <label class="text-sm font-semibold text-base-content/70">
+    API Key: <span class="text-xs text-base-content/40">(thêm nhiều key để tự động xoay vòng khi bị limit)</span>
+  </label>
+  {apiKeys().map((key, index) => (
+    <div class="flex gap-2">
+      <input
+        type={showKey() ? 'text' : 'password'}
+        class="input input-bordered flex-1 font-mono text-sm"
+        placeholder={
+          provider() === 'claude'
+            ? 'sk-ant-...'
+            : provider() === 'openai'
+            ? 'sk-...'
+            : provider() === 'groq'
+            ? 'gsk_...'
+            : 'AIza...'
+        }
+        value={key}
+        onInput={(e) => {
+          const updated = [...apiKeys()];
+          updated[index] = e.currentTarget.value;
+          setApiKeys(updated);
+        }}
+      />
+      {index === apiKeys().length - 1 ? (
+        <button
+          class="btn btn-ghost btn-square text-success"
+          title="Thêm key"
+          onClick={() => setApiKeys([...apiKeys(), ''])}
+        >
+          ➕
+        </button>
+      ) : (
+        <button
+          class="btn btn-ghost btn-square text-error"
+          title="Xóa key này"
+          onClick={() => setApiKeys(apiKeys().filter((_, i) => i !== index))}
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  ))}
+  <button
+    class="btn btn-ghost btn-sm self-end"
+    title={showKey() ? 'Ẩn key' : 'Hiện key'}
+    onClick={() => setShowKey(!showKey())}
+  >
+    {showKey() ? '🙈 Ẩn' : '👁 Hiện'}
+  </button>
+</div>
 
           {/* Save key checkbox */}
           <label class="flex items-center gap-3 cursor-pointer">
@@ -135,14 +159,15 @@ export default function AiRenameModal(props: Props) {
             </button>
             <button
   class="btn btn-primary"
-  disabled={apiKey().trim().length === 0}
+  disabled={apiKeys().filter(k => k.trim().length > 0).length === 0}
   onClick={() => {
+    const validKeys = apiKeys().filter(k => k.trim().length > 0);
     if (saveKey()) {
-      saveApiKey(provider(), apiKey());
+      saveApiKey(provider(), validKeys.join(','));
     }
     props.onConfirm?.({
       provider: provider(),
-      apiKey: apiKey(),
+      apiKey: validKeys.join(','),
     });
     props.onClose();
   }}
