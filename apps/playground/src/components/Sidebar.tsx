@@ -1,5 +1,5 @@
 import { createEffect, createSignal, Show } from 'solid-js';
-import { config } from '../App';
+import { config, setConfig } from '../App';
 import { useDeobfuscateContext } from '../context/DeobfuscateContext';
 import FileTree from './FileTree';
 import AiRenameModal from './AiRenameModal';
@@ -15,7 +15,7 @@ interface Props {
 type MangleMode = 'off' | 'all' | 'hex' | 'short' | 'custom';
 
 export default function Sidebar(props: Props) {
-  const { deobfuscate, cancel, isRunning } = useDeobfuscateContext();
+  const { deobfuscate, cancelDeobfuscate, deobfuscating } = useDeobfuscateContext();
 
   const [mangleMode, setMangleMode] = createSignal<MangleMode>('off');
   const [mangleString, setMangleString] = createSignal('_0x');
@@ -26,15 +26,15 @@ export default function Sidebar(props: Props) {
 
   createEffect(() => {
     const mode = mangleMode();
-    if (mode === 'off') config.mangleRegex = undefined;
-    else if (mode === 'all') config.mangleRegex = /.+/;
-    else if (mode === 'hex') config.mangleRegex = /^_0x/;
-    else if (mode === 'short') config.mangleRegex = /^.{1,2}$/;
+    if (mode === 'off') setConfig('mangleRegex', null);
+    else if (mode === 'all') setConfig('mangleRegex', /./);
+    else if (mode === 'hex') setConfig('mangleRegex', /_0x[a-f\d]+/i);
+    else if (mode === 'short') setConfig('mangleRegex', /../);
     else if (mode === 'custom') {
       try {
-        config.mangleRegex = new RegExp(mangleString(), mangleFlags());
+        setConfig('mangleRegex', new RegExp(mangleString(), mangleFlags()));
       } catch {
-        config.mangleRegex = undefined;
+        setConfig('mangleRegex', null);
       }
     }
   });
@@ -45,7 +45,7 @@ export default function Sidebar(props: Props) {
       <div class="flex flex-col items-center gap-2 py-4 px-2">
         {/* Start / Cancel button */}
         <Show
-          when={isRunning()}
+          when={deobfuscating()}
           fallback={
             <button
               class="btn btn-primary w-full"
@@ -62,7 +62,7 @@ export default function Sidebar(props: Props) {
             </button>
           }
         >
-          <button class="btn btn-error w-full" title="Cancel" onClick={cancel}>
+          <button class="btn btn-error w-full" title="Cancel" onClick={cancelDeobfuscate}>
             <span class="loading loading-spinner loading-sm"></span>
             <span class="hidden sm:inline">Cancel</span>
           </button>
@@ -105,32 +105,32 @@ export default function Sidebar(props: Props) {
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" class="checkbox checkbox-sm"
             checked={config.deobfuscate}
-            onChange={e => (config.deobfuscate = e.currentTarget.checked)} />
-          <a href="/docs/guide/deobfuscation.html" target="_blank"
+            onChange={e => setConfig('deobfuscate', e.currentTarget.checked)} />
+          <a href="/docs/concepts/deobfuscate.html" target="_blank"
             class="hover:underline">Deobfuscate</a>
         </label>
 
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" class="checkbox checkbox-sm"
             checked={config.unminify}
-            onChange={e => (config.unminify = e.currentTarget.checked)} />
-          <a href="/docs/guide/unminify.html" target="_blank"
+            onChange={e => setConfig('unminify', e.currentTarget.checked)} />
+          <a href="/docs/concepts/unminify.html" target="_blank"
             class="hover:underline">Unminify</a>
         </label>
 
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" class="checkbox checkbox-sm"
-            checked={config.unpackBundles}
-            onChange={e => (config.unpackBundles = e.currentTarget.checked)} />
-          <a href="/docs/guide/unpack-bundles.html" target="_blank"
+            checked={config.unpack}
+            onChange={e => setConfig('unpack', e.currentTarget.checked)} />
+          <a href="/docs/concepts/unpack.html" target="_blank"
             class="hover:underline">Unpack Bundle</a>
         </label>
 
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" class="checkbox checkbox-sm"
             checked={config.jsx}
-            onChange={e => (config.jsx = e.currentTarget.checked)} />
-          <a href="/docs/guide/jsx.html" target="_blank"
+            onChange={e => setConfig('jsx', e.currentTarget.checked)} />
+          <a href="/docs/concepts/jsx.html" target="_blank"
             class="hover:underline">Decompile JSX</a>
         </label>
       </div>
@@ -162,7 +162,10 @@ export default function Sidebar(props: Props) {
 
       {/* File tree */}
       <div class="flex-1 overflow-y-auto">
-        <FileTree paths={props.paths} onFileClick={props.onFileClick} />
+        <FileTree
+          paths={props.paths}
+          onFileClick={(node) => props.onFileClick?.(node.path)}
+        />
       </div>
 
       {/* AI Rename Modal */}
