@@ -3,41 +3,44 @@ const GEMINI_API_URL =
 
 const PROMPT_TEMPLATE = (code: string) => `
 You are a JavaScript/Google Apps Script reverse engineering expert.
-Analyze this obfuscated code using 4 layers and rename ALL obfuscated variables/functions:
+Your job is to fully clean, rename and reformat obfuscated code into production-ready readable code.
 
-LAYER 1 - STRING ANALYSIS:
-- Extract all string literals in the code
-- Infer the purpose of each function from strings like error messages, labels, keys
+STEP 1 - RENAME obfuscated identifiers:
+- ONLY rename identifiers matching pattern _0x..., _abc, _xyz, single/double meaningless letters (except loop counters i, j, k)
+- DO NOT rename functions or variables that already have meaningful names (saveNguoiDung, loginUser, getCurrentUser, _piwjp, _mrdot, _hzpga, _ipwda...)
+- Rename internal variables/parameters to meaningful camelCase Vietnamese names
+- Examples: _0x3461cb → i, _0x2ba0be → maKyTu, _0x53eeb3 → hash1, _0x31d034 → sheetNguoiDung
 
-LAYER 2 - API CALLS:
-- Identify Google Apps Script APIs: SpreadsheetApp, PropertiesService, LockService, Session, HtmlService, MailApp...
-- Identify DOM/Node APIs
-- sheet.deleteRow() → delete operation
-- sheet.appendRow() → insert operation  
-- sheet.getRange().setValues() → update operation
+STEP 2 - FORMAT clean readable code:
+- Use consistent 2-space indentation
+- Group related functions under Vietnamese section headers like:
+  // ─────────────────────────────────────────
+  // TÊN NHÓM CHỨC NĂNG
+  // ─────────────────────────────────────────
+- ALL comments must be written in Vietnamese — absolutely no English comments
 
-LAYER 3 - INPUT/OUTPUT PATTERN:
-- Analyze function parameters and return values
-- (username, password) + return {success, user} → loginUser
-- (prefix, sheet) + return string ID → generateId
-- No params + return multi-sheet data → getAllData
+STEP 3 - COMMENTS in Vietnamese:
+- Add 1-line Vietnamese comment above each function: // Mô tả chức năng bằng tiếng Việt
+- Add inline Vietnamese comments for important logic lines
+- Examples:
+  // Lưu thông tin học sinh — thêm mới hoặc cập nhật
+  // Kiểm tra license hợp lệ
+  // Lấy dữ liệu từ cache theo token
+  // Không cho phép tự xóa bản thân
 
-LAYER 4 - STRUCTURAL PATTERN:
-- Find repeated patterns (license check, error handling...)
-- Each function doing the same pattern but different "action" → name by the action
-
-RULES:
-- ONLY rename obfuscated identifiers in the pattern _0x..., _abc, _xyz, single/double letter names (except loop counters i, j, k)
-- DO NOT rename any function or variable that already has a meaningful name — examples: saveNguoiDung stays saveNguoiDung, deleteHocSinh stays deleteHocSinh, loginUser stays loginUser, getCurrentUser stays getCurrentUser
-- DO NOT rename parameters that are already meaningful — examples: sessionToken, userData, classData stay as-is
-- Preserve 100% of the original logic, do NOT simplify or remove anything
-- DO NOT reorder functions or statements — preserve the exact original sequence
-- DO NOT translate any Vietnamese text, strings, variable names, or comments — keep all Vietnamese as-is
+STRICT RULES — MUST FOLLOW EXACTLY:
+- PRESERVE 100% all logic, conditions, operators, return values — do NOT simplify, merge, or split any statement
+- PRESERVE exact function signatures — do NOT change parameter names of public functions (loginUser, saveHocSinh, deleteNguoiDung...)
+- PRESERVE exact original function order — do NOT reorder anything
+- PRESERVE all Vietnamese string literals exactly as-is
+- PRESERVE all numeric values, magic numbers, and constants exactly as-is
 - DO NOT modify content inside long HTML strings or template literals
-- Add a brief 1-line comment above each function explaining its purpose
-- Return ONLY the renamed JavaScript code, no explanation text outside the code
+- DO NOT add, remove, or change any logic that does not exist in the original
+- DO NOT merge multi-line if/else blocks into single lines
+- ALL comments must be in Vietnamese — never write English comments
+- Return ONLY the final JavaScript code, no explanation text outside the code
 
-Code to analyze:
+Code to process:
 \`\`\`javascript
 ${code}
 \`\`\`
