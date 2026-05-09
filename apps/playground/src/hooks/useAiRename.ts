@@ -1,6 +1,3 @@
-const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-
 const PROMPT_TEMPLATE = (code: string) => `
 Bạn là chuyên gia phân tích ngược JavaScript và Google Apps Script.
 Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chuẩn Google Apps Script.
@@ -55,6 +52,7 @@ ${code}
 export interface AiRenameOptions {
   apiKey: string;
   code: string;
+  provider?: 'gemini' | 'openai' | 'claude';
   onProgress?: (message: string) => void;
 }
 
@@ -67,93 +65,94 @@ export interface AiRenameResult {
 export async function aiRenameVariables(
   options: AiRenameOptions,
 ): Promise<AiRenameResult> {
-  const { apiKey, code, onProgress } = options;
+  const { apiKey, code, onProgress, provider = 'gemini' } = options;
 
   if (!code.trim()) {
     return { success: false, error: 'Không có code để xử lý!' };
   }
 
-  // Ước tính token — ~4 chars = 1 token
   const estimatedTokens = Math.ceil(code.length / 4);
   onProgress?.(`Đang phân tích... (~${estimatedTokens} tokens)`);
 
   try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: PROMPT_TEMPLATE(code) }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,      // Thấp để kết quả ổn định
-          maxOutputTokens: 65536, // Tối đa output
-        },
-      }),
-    });
+    let resultText = '';
 
-    // Xử lý lỗi HTTP
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      
-      if (response.status === 429) {
-        return {
-          success: false,
-          error: '⏳ Đã đạt giới hạn quota! Vui lòng chờ 1 phút rồi thử lại.',
-        };
-      }
-      if (response.status === 400) {
-        return {
-          success: false,
-          error: '❌ API Key không hợp lệ! Vui lòng kiểm tra lại key.',
-        };
-      }
-      if (response.status === 403) {
-        return {
-          success: false,
-          error: '🔒 API Key không có quyền truy cập! Kiểm tra lại key.',
-        };
-      }
-
-      return {
-        success: false,
-        error: `Lỗi API: ${response.status} — ${errorData?.error?.message ?? 'Unknown error'}`,
-      };
+    if (provider === 'gemini') {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: PROMPT_TEMPLATE(code) }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
+        }),
+      });
+      if (!response.ok) return await handleHttpError(response);
+      const data = await response.json();
+      resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     }
 
-    const data = await response.json();
+    else if (provider === 'openai') {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+          temperature: 0.1,
+          max_tokens: 16384,
+        }),
+      });
+      if (!response.ok) return await handleHttpError(response);
+      const data = await response.json();
+      resultText = data?.choices?.[0]?.message?.content ?? '';
+    }
 
-    // Lấy text từ response
-    const resultText =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    else if (provider === 'claude') {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5',
+          max_tokens: 16384,
+          messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+        }),
+      });
+      if (!response.ok) return await handleHttpError(response);
+      const data = await response.json();
+      resultText = data?.content?.[0]?.text ?? '';
+    }
 
     if (!resultText) {
-      return {
-        success: false,
-        error: 'AI không trả về kết quả. Thử lại sau!',
-      };
+      return { success: false, error: 'AI không trả về kết quả. Thử lại sau!' };
     }
 
-    // Tách code ra khỏi markdown code block nếu có
-    const cleanCode = extractCode(resultText);
-
     onProgress?.('✅ Hoàn thành!');
-    return { success: true, code: cleanCode };
+    return { success: true, code: extractCode(resultText) };
 
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    
-    if (message.includes('fetch')) {
-      return {
-        success: false,
-        error: '🌐 Lỗi kết nối mạng! Kiểm tra internet và thử lại.',
-      };
-    }
-    
-    return { success: false, error: `Lỗi: ${message}` };
+    return { success: false, error: `🌐 Lỗi kết nối: ${message}` };
   }
+}
+
+// Xử lý lỗi HTTP chung cho cả 3 provider
+async function handleHttpError(response: Response): Promise<AiRenameResult> {
+  const status = response.status;
+  if (status === 429) return { success: false, error: '⏳ Vượt quota! Chờ 1 phút rồi thử lại.' };
+  if (status === 400) return { success: false, error: '❌ Request không hợp lệ (400)!' };
+  if (status === 401) return { success: false, error: '❌ API Key không hợp lệ hoặc hết hạn (401)!' };
+  if (status === 403) return { success: false, error: '🚫 Không có quyền truy cập API (403)!' };
+  const body = await response.json().catch(() => ({}));
+  const msg = (body as { error?: { message?: string } })?.error?.message ?? response.statusText;
+  return { success: false, error: `Lỗi API (${status}): ${msg}` };
 }
 
 // Tách code ra khỏi ```javascript ... ``` nếu AI trả về markdown
