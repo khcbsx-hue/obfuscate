@@ -185,6 +185,27 @@ function App() {
     ]);
   }
 
+  function onAiResult(code: string) {
+  const base = activeTab()?.uri.path.split('/').at(-1) ?? 'Untitled';
+  const name = base.replace(/(\.[^.]+)?$/, '.ai-renamed$1');
+  
+  const existing = models().find(
+    (m) => m.uri.scheme === 'untitled' && m.uri.path.endsWith(name)
+  );
+  if (existing) {
+    existing.setValue(code);
+    openTab(existing);
+  } else {
+    const model = monaco.editor.createModel(
+      code,
+      'javascript',
+      monaco.Uri.from({ scheme: 'untitled', path: name }),
+    );
+    setModels([...models(), model]);
+    openTab(model);
+  }
+}
+
   async function loadFromURL(url: string) {
     const response = await fetch(url)
       .then((res) => (res.ok ? res : Promise.reject(new Error())))
@@ -220,7 +241,12 @@ function App() {
       <ProgressBar />
       {/* Page */}
       <div class="flex flex-1 overflow-hidden">
-        <Sidebar paths={filePaths()} onFileClick={openFile} />
+        <Sidebar
+  paths={filePaths()}
+  onFileClick={openFile}
+  getCurrentCode={() => activeTab()?.getValue() ?? ''}
+  onAiResult={onAiResult}
+/>
 
         {/* Workspace */}
         <main class="flex-1 flex flex-col overflow-hidden">
