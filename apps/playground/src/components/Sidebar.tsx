@@ -180,10 +180,11 @@ export default function Sidebar(props: Props) {
           }
           setShowAiModal(false);
           setAiLoading(true);
-          setAiProgress('Đang gửi tới Gemini...');
+          setAiProgress('Đang chuẩn bị...');
           const result = await aiRenameVariables({
             apiKey,
             code,
+            provider,
             onProgress: setAiProgress,
           });
           setAiLoading(false);
