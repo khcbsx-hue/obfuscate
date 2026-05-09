@@ -1,8 +1,10 @@
 import { createSignal, Show } from 'solid-js';
+import { saveApiKey, getApiKey, deleteApiKey, hasApiKey } from '../hooks/useAiRename';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  onConfirm?: (config: { provider: string; apiKey: string }) => void;
 }
 
 export default function AiRenameModal(props: Props) {
@@ -10,6 +12,8 @@ export default function AiRenameModal(props: Props) {
   const [apiKey, setApiKey] = createSignal('');
   const [showKey, setShowKey] = createSignal(false);
   const [saveKey, setSaveKey] = createSignal(true);
+  const savedKey = getApiKey(provider());
+  if (savedKey) setApiKey(savedKey);
 
   return (
     <Show when={props.open}>
@@ -127,11 +131,21 @@ export default function AiRenameModal(props: Props) {
               Hủy
             </button>
             <button
-              class="btn btn-primary"
-              disabled={apiKey().trim().length === 0}
-            >
-              ✨ Xác nhận
-            </button>
+  class="btn btn-primary"
+  disabled={apiKey().trim().length === 0}
+  onClick={() => {
+    if (saveKey()) {
+      saveApiKey(provider(), apiKey());
+    }
+    props.onConfirm?.({
+      provider: provider(),
+      apiKey: apiKey(),
+    });
+    props.onClose();
+  }}
+>
+  ✨ Xác nhận
+</button>
           </div>
 
         </div>
