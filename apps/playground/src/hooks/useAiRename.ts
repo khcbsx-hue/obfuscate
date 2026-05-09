@@ -52,7 +52,7 @@ ${code}
 export interface AiRenameOptions {
   apiKey: string;
   code: string;
-  provider?: 'gemini' | 'openai' | 'claude';
+  provider?: 'gemini' | 'openai' | 'claude'| 'groq';
   onProgress?: (message: string) => void;
 }
 
@@ -110,7 +110,24 @@ export async function aiRenameVariables(
       const data = await response.json();
       resultText = data?.choices?.[0]?.message?.content ?? '';
     }
-
+     else if (provider === 'groq') {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+      temperature: 0.1,
+      max_tokens: 32768,
+    }),
+  });
+  if (!response.ok) return await handleHttpError(response);
+  const data = await response.json();
+  resultText = data?.choices?.[0]?.message?.content ?? '';
+}
     else if (provider === 'claude') {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
