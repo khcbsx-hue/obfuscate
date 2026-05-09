@@ -52,7 +52,8 @@ ${code}
 export interface AiRenameOptions {
   apiKey: string;
   code: string;
-  provider?: 'gemini' | 'openai' | 'claude'| 'groq';
+  provider?: 'gemini' | 'openai' | 'claude' | 'groq';
+  apiKeys?: string[];
   onProgress?: (message: string) => void;
 }
 
@@ -65,102 +66,132 @@ export interface AiRenameResult {
 export async function aiRenameVariables(
   options: AiRenameOptions,
 ): Promise<AiRenameResult> {
-  const { apiKey, code, onProgress, provider = 'gemini' } = options;
+  const { code, onProgress, provider = 'gemini' } = options;
+  const apiKeys = options.apiKeys?.length
+    ? options.apiKeys
+    : options.apiKey
+    ? options.apiKey.split(',').map(k => k.trim()).filter(Boolean)
+    : [];
+
+  if (apiKeys.length === 0) {
+    return { success: false, error: 'Chưa nhập API Key!' };
+  }
 
   if (!code.trim()) {
     return { success: false, error: 'Không có code để xử lý!' };
   }
 
-  const estimatedTokens = Math.ceil(code.length / 4);
-  onProgress?.(`Đang phân tích... (~${estimatedTokens} tokens)`);
+  let lastError = '';
+  for (let i = 0; i < apiKeys.length; i++) {
+    const apiKey = apiKeys[i];
+    const keyLabel = apiKeys.length > 1 ? ` (key ${i + 1}/${apiKeys.length})` : '';
 
-  try {
-    let resultText = '';
+    const estimatedTokens = Math.ceil(code.length / 4);
+    onProgress?.(`Đang phân tích...${keyLabel} (~${estimatedTokens} tokens)`);
 
-    if (provider === 'gemini') {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: PROMPT_TEMPLATE(code) }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
-        }),
-      });
-      if (!response.ok) return await handleHttpError(response);
-      const data = await response.json();
-      resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    try {
+      let resultText = '';
+
+      if (provider === 'gemini') {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: PROMPT_TEMPLATE(code) }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
+        }
+        const data = await response.json();
+        resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      }
+
+      else if (provider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+            temperature: 0.1,
+            max_tokens: 16384,
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
+        }
+        const data = await response.json();
+        resultText = data?.choices?.[0]?.message?.content ?? '';
+      }
+
+      else if (provider === 'groq') {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+            temperature: 0.1,
+            max_tokens: 32768,
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
+        }
+        const data = await response.json();
+        resultText = data?.choices?.[0]?.message?.content ?? '';
+      }
+
+      else if (provider === 'claude') {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5',
+            max_tokens: 16384,
+            messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
+        }
+        const data = await response.json();
+        resultText = data?.content?.[0]?.text ?? '';
+      }
+
+      if (!resultText) {
+        lastError = 'AI không trả về kết quả. Thử lại sau!';
+        continue;
+      }
+
+      onProgress?.('✅ Hoàn thành!');
+      return { success: true, code: extractCode(resultText) };
+
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      lastError = `🌐 Lỗi kết nối: ${message}`;
+      continue;
     }
-
-    else if (provider === 'openai') {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
-          temperature: 0.1,
-          max_tokens: 16384,
-        }),
-      });
-      if (!response.ok) return await handleHttpError(response);
-      const data = await response.json();
-      resultText = data?.choices?.[0]?.message?.content ?? '';
-    }
-     else if (provider === 'groq') {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
-      temperature: 0.1,
-      max_tokens: 32768,
-    }),
-  });
-  if (!response.ok) return await handleHttpError(response);
-  const data = await response.json();
-  resultText = data?.choices?.[0]?.message?.content ?? '';
-}
-    else if (provider === 'claude') {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5',
-          max_tokens: 16384,
-          messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
-        }),
-      });
-      if (!response.ok) return await handleHttpError(response);
-      const data = await response.json();
-      resultText = data?.content?.[0]?.text ?? '';
-    }
-
-    if (!resultText) {
-      return { success: false, error: 'AI không trả về kết quả. Thử lại sau!' };
-    }
-
-    onProgress?.('✅ Hoàn thành!');
-    return { success: true, code: extractCode(resultText) };
-
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return { success: false, error: `🌐 Lỗi kết nối: ${message}` };
   }
+
+  return { success: false, error: lastError || 'Tất cả key đều thất bại!' };
 }
 
-// Xử lý lỗi HTTP chung cho cả 3 provider
 async function handleHttpError(response: Response): Promise<AiRenameResult> {
   const status = response.status;
   if (status === 429) return { success: false, error: '⏳ Vượt quota! Chờ 1 phút rồi thử lại.' };
@@ -172,29 +203,24 @@ async function handleHttpError(response: Response): Promise<AiRenameResult> {
   return { success: false, error: `Lỗi API (${status}): ${msg}` };
 }
 
-// Tách code ra khỏi ```javascript ... ``` nếu AI trả về markdown
 function extractCode(text: string): string {
   const match = text.match(/```(?:javascript|js)?\n?([\s\S]*?)```/);
   if (match) return match[1].trim();
   return text.trim();
 }
 
-// Lưu key vào localStorage
 export function saveApiKey(provider: string, key: string) {
   localStorage.setItem(`ai_key_${provider}`, key);
 }
 
-// Lấy key từ localStorage
 export function getApiKey(provider: string): string {
   return localStorage.getItem(`ai_key_${provider}`) ?? '';
 }
 
-// Xóa key khỏi localStorage
 export function deleteApiKey(provider: string) {
   localStorage.removeItem(`ai_key_${provider}`);
 }
 
-// Kiểm tra đã có key chưa
 export function hasApiKey(provider: string): boolean {
   return !!localStorage.getItem(`ai_key_${provider}`);
 }
