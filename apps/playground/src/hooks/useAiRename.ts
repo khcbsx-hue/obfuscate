@@ -2,45 +2,51 @@ const GEMINI_API_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 const PROMPT_TEMPLATE = (code: string) => `
-You are a JavaScript/Google Apps Script reverse engineering expert.
-Your job is to fully clean, rename and reformat obfuscated code into production-ready readable code.
+Bạn là chuyên gia phân tích ngược JavaScript và Google Apps Script.
+Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chuẩn Google Apps Script.
 
-STEP 1 - RENAME obfuscated identifiers:
-- ONLY rename identifiers matching pattern _0x..., _abc, _xyz, single/double meaningless letters (except loop counters i, j, k)
-- DO NOT rename functions or variables that already have meaningful names (saveNguoiDung, loginUser, getCurrentUser, _piwjp, _mrdot, _hzpga, _ipwda...)
-- Rename internal variables/parameters to meaningful camelCase Vietnamese names
-- Examples: _0x3461cb → i, _0x2ba0be → maKyTu, _0x53eeb3 → hash1, _0x31d034 → sheetNguoiDung
+1. GIẢI MÃ TÊN BIẾN/HÀM BỊ RỐI:
+   - Chỉ đổi tên các identifier dạng _0x..., _abc, _xyz, tên 1-2 ký tự vô nghĩa
+   - KHÔNG đổi tên các hàm/biến đã có nghĩa (saveNguoiDung, loginUser, _piwjp, _mrdot...)
+   - Đổi tên biến nội bộ thành camelCase tiếng Việt có nghĩa
+   - Ví dụ: _0x31d034 → sheetNguoiDung, _0x3dbcc8 → duLieuNguoiDung, _0x488d31 → i
 
-STEP 2 - FORMAT clean readable code:
-- Use consistent 2-space indentation
-- Group related functions under Vietnamese section headers like:
-  // ─────────────────────────────────────────
-  // TÊN NHÓM CHỨC NĂNG
-  // ─────────────────────────────────────────
-- ALL comments must be written in Vietnamese — absolutely no English comments
+2. ĐẶT TÊN DỰA VÀO CONTEXT:
+   - Đọc string literals, API calls, return values bên trong hàm để suy ra tên đúng
+   - Thấy getSheetByName("Học sinh") + appendRow → biến là sheetHocSinh
+   - Thấy getScriptCache().get(token) → biến là cacheDuLieu
+   - Thấy deleteRow() + tham số mã → biến là viTriDong, maCanXoa
+   - Thấy PropertiesService.getScriptProperties() → biến là scriptProps
+   - Thấy Utilities.getUuid() → biến là sessionToken
 
-STEP 3 - COMMENTS in Vietnamese:
-- Add 1-line Vietnamese comment above each function: // Mô tả chức năng bằng tiếng Việt
-- Add inline Vietnamese comments for important logic lines
-- Examples:
-  // Lưu thông tin học sinh — thêm mới hoặc cập nhật
-  // Kiểm tra license hợp lệ
-  // Lấy dữ liệu từ cache theo token
-  // Không cho phép tự xóa bản thân
+3. COMMENT TIẾNG VIỆT:
+   - Thêm 1 dòng comment tiếng Việt phía trên mỗi hàm giải thích chức năng
+   - Thêm comment inline cho các dòng logic quan trọng
+   - TUYỆT ĐỐI không dùng tiếng Anh trong comment
+   - Ví dụ đúng:
+     // Lưu thông tin học sinh — thêm mới hoặc cập nhật
+     // Kiểm tra quyền license trước khi thực thi
+     // Tìm dòng theo mã, trả về -1 nếu không tìm thấy
 
-STRICT RULES — MUST FOLLOW EXACTLY:
-- PRESERVE 100% all logic, conditions, operators, return values — do NOT simplify, merge, or split any statement
-- PRESERVE exact function signatures — do NOT change parameter names of public functions (loginUser, saveHocSinh, deleteNguoiDung...)
-- PRESERVE exact original function order — do NOT reorder anything
-- PRESERVE all Vietnamese string literals exactly as-is
-- PRESERVE all numeric values, magic numbers, and constants exactly as-is
-- DO NOT modify content inside long HTML strings or template literals
-- DO NOT add, remove, or change any logic that does not exist in the original
-- DO NOT merge multi-line if/else blocks into single lines
-- ALL comments must be in Vietnamese — never write English comments
-- Return ONLY the final JavaScript code, no explanation text outside the code
+4. FORMAT CHUẨN GOOGLE APPS SCRIPT:
+   - Thụt lề 2 spaces nhất quán
+   - Nhóm các hàm liên quan dưới header tiếng Việt:
+     // ─────────────────────────────────────────
+     // HỌC SINH
+     // ─────────────────────────────────────────
+   - Giữ dấu ngoặc nhọn { } đúng chuẩn
 
-Code to process:
+5. GIỮ NGUYÊN 100% — QUAN TRỌNG NHẤT:
+   - KHÔNG thay đổi bất kỳ logic, điều kiện, toán tử, giá trị trả về
+   - KHÔNG đổi tên tham số của hàm public (loginUser, saveHocSinh...)
+   - KHÔNG thay đổi thứ tự các hàm
+   - KHÔNG rút gọn hoặc gộp các khối if/else nhiều dòng thành 1 dòng
+   - KHÔNG thêm hoặc xóa bất kỳ logic nào không có trong code gốc
+   - KHÔNG dịch hoặc sửa bất kỳ chuỗi tiếng Việt nào trong code
+   - KHÔNG sửa nội dung bên trong các chuỗi HTML dài
+   - Chỉ trả về code JavaScript hoàn chỉnh, không có giải thích bên ngoài
+
+Code cần xử lý:
 \`\`\`javascript
 ${code}
 \`\`\`
