@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function AiRenameModal(props: Props) {
-  const [provider, setProvider] = createSignal<'claude' | 'openai' | 'gemini'>('claude');
+  const [provider, setProvider] = createSignal<'claude' | 'openai' | 'gemini' | 'groq'>('gemini');
   const [apiKey, setApiKey] = createSignal('');
   const [showKey, setShowKey] = createSignal(false);
   const [saveKey, setSaveKey] = createSignal(true);
@@ -88,6 +88,8 @@ export default function AiRenameModal(props: Props) {
                     ? 'sk-ant-...'
                     : provider() === 'openai'
                     ? 'sk-...'
+                    : provider() === 'groq'
+                    ? 'gsk_...'
                     : 'AIza...'
                 }
                 value={apiKey()}
