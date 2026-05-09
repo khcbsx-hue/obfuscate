@@ -27,10 +27,15 @@ LAYER 4 - STRUCTURAL PATTERN:
 - Each function doing the same pattern but different "action" → name by the action
 
 RULES:
-- Rename ALL obfuscated names (_0x..., _abc, short meaningless names) to descriptive camelCase
+- ONLY rename obfuscated identifiers in the pattern _0x..., _abc, _xyz, single/double letter names (except loop counters i, j, k)
+- DO NOT rename any function or variable that already has a meaningful name — examples: saveNguoiDung stays saveNguoiDung, deleteHocSinh stays deleteHocSinh, loginUser stays loginUser, getCurrentUser stays getCurrentUser
+- DO NOT rename parameters that are already meaningful — examples: sessionToken, userData, classData stay as-is
 - Preserve 100% of the original logic, do NOT simplify or remove anything
-- Add a brief 1-line comment above each renamed function
-- Return ONLY the renamed JavaScript code, absolutely no explanation text
+- DO NOT reorder functions or statements — preserve the exact original sequence
+- DO NOT translate any Vietnamese text, strings, variable names, or comments — keep all Vietnamese as-is
+- DO NOT modify content inside long HTML strings or template literals
+- Add a brief 1-line comment above each function explaining its purpose
+- Return ONLY the renamed JavaScript code, no explanation text outside the code
 
 Code to analyze:
 \`\`\`javascript
