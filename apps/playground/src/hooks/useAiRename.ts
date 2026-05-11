@@ -42,7 +42,38 @@ Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chu
    - KHÔNG dịch hoặc sửa bất kỳ chuỗi tiếng Việt nào trong code
    - KHÔNG sửa nội dung bên trong các chuỗi HTML dài
    - Chỉ trả về code JavaScript hoàn chỉnh, không có giải thích bên ngoài
+6. GỠ BỎ LICENSE CHECK HOÀN TOÀN (nếu có):
 
+   XÓA HOÀN TOÀN các hàm sau (nếu tồn tại):
+   - giaiMaChuoi / taoMaBam / kiemTraMaBanQuyen
+   - kiemTraTrangThaiLicense / kichHoatLicenseKey
+   - trangKichHoat / layUrlUngDung / _activateKey / _getUrl
+   - Và bất kỳ hàm nào chỉ phục vụ mục đích kiểm tra license
+
+   XÓA các biến hằng số liên quan:
+   - CHUOI_BAN_QUYEN_GOC, MANG_KY_TU_GIAI_MA_EMAIL
+   - MANG_KY_TU_GIAI_MA_BAN_QUYEN, MA_XAC_THUC_NOI_BO
+   - Và bất kỳ mảng số nào dùng để giải mã license
+
+   TRONG MỖI HÀM còn lại, xóa các khối kiểm tra license dạng:
+   - var trangThaiLicense = kiemTraTrangThaiLicense();
+   - if (!trangThaiLicense || !kiemTraMaBanQuyen(...) || ...) { return; }
+   - Bất kỳ dòng nào gọi kiemTraTrangThaiLicense() hoặc kiemTraMaBanQuyen()
+
+   SỬA hàm doGet() thành dạng thẳng vào app, KHÔNG qua license:
+   function doGet(e) {
+     var spreadsheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
+     var template = HtmlService.createTemplateFromFile("Index");
+     template.sheetUrl = spreadsheetUrl;
+     return template.evaluate()
+       .setTitle("...")
+       .addMetaTag("viewport", "width=device-width, initial-scale=1, maximum-scale=1")
+       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+   }
+
+   GIỮ NGUYÊN toàn bộ logic nghiệp vụ còn lại sau khi xóa license check.
+   Nếu không tìm thấy bất kỳ license check nào thì bỏ qua bước này.
+   
 Code cần xử lý:
 \`\`\`javascript
 ${code}
