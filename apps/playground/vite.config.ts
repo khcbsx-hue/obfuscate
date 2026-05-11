@@ -13,7 +13,7 @@ const { default: monacoEditorPlugin } = monacoEditor as unknown as {
 };
 
 export default defineConfig({
-  base: '/webcrack/',
+  base: '/obfuscate/',
   optimizeDeps: {
     exclude: ['isolated-vm'],
   },
