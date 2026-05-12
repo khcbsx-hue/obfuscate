@@ -1,3 +1,8 @@
+import * as parser from '@babel/parser';
+import traverse from '@babel/traverse';
+import generate from '@babel/generator';
+import * as t from '@babel/types';
+
 const PROMPT_TEMPLATE = (code: string) => `
 Bạn là chuyên gia phân tích ngược JavaScript và Google Apps Script.
 Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chuẩn Google Apps Script.
@@ -47,37 +52,94 @@ ${code}
 \`\`\`
 `;
 
-// ── Tách code thành chunks theo ranh giới hàm ─────────────────────────────────
-// Mỗi chunk tối đa 170,000 ký tự (~42,500 tokens input)
-// Output ước tính x1.5 = ~63,750 tokens → an toàn dưới 65,536
-function splitIntoChunks(code: string, maxCharsPerChunk = 170000): string[] {
+// ── Tách code bằng Babel AST — đảm bảo 100% không cắt giữa hàm ───────────────
+function splitByAST(code: string, maxCharsPerChunk = 30000): string[] {
+  try {
+    // Parse code thành AST
+    const ast = parser.parse(code, {
+      sourceType: 'script',
+      allowReturnOutsideFunction: true,
+      errorRecovery: true, // không throw khi gặp lỗi nhỏ
+      plugins: ['typescript'],
+    });
+
+    // Lấy danh sách tất cả top-level statements (hàm, biến, etc.)
+    const topLevelNodes = ast.program.body;
+
+    if (topLevelNodes.length === 0) {
+      return [code];
+    }
+
+    const chunks: string[] = [];
+    let currentNodes: string[] = [];
+    let currentLength = 0;
+
+    for (const node of topLevelNodes) {
+      // Lấy source code của node này từ code gốc
+      const start = node.start ?? 0;
+      const end = node.end ?? code.length;
+      const nodeCode = code.slice(start, end);
+      const nodeLength = nodeCode.length;
+
+      // Nếu chunk hiện tại đã đủ lớn → cắt tại đây
+      if (currentLength >= maxCharsPerChunk && currentNodes.length > 0) {
+        chunks.push(currentNodes.join('\n'));
+        currentNodes = [];
+        currentLength = 0;
+      }
+
+      currentNodes.push(nodeCode);
+      currentLength += nodeLength + 1;
+    }
+
+    // Phần còn lại
+    if (currentNodes.length > 0) {
+      chunks.push(currentNodes.join('\n'));
+    }
+
+    return chunks;
+
+  } catch (err) {
+    // Nếu parse lỗi → fallback về cắt theo braceDepth
+    console.warn('⚠️ Babel parse thất bại, dùng fallback braceDepth:', err);
+    return splitByBraceDepth(code, maxCharsPerChunk);
+  }
+}
+
+// ── Fallback: tách theo braceDepth nếu Babel parse lỗi ───────────────────────
+function splitByBraceDepth(code: string, maxCharsPerChunk = 30000): string[] {
   const lines = code.split('\n');
   const chunks: string[] = [];
   let current: string[] = [];
   let currentLength = 0;
+  let braceDepth = 0;
+  let inString = false;
+  let stringChar = '';
 
   for (const line of lines) {
-    const trimmed = line.trim();
-
-    const isFunctionBoundary =
-      /^(async\s+)?function\s+\w+/.test(trimmed) ||
-      /^(const|let|var)\s+\w+\s*=\s*(async\s*)?\(/.test(trimmed) ||
-      /^(const|let|var)\s+\w+\s*=\s*(async\s*)?function/.test(trimmed);
-
-    if (isFunctionBoundary && currentLength > maxCharsPerChunk && current.length > 0) {
-      chunks.push(current.join('\n'));
-      current = [];
-      currentLength = 0;
+    // Đếm { } nhưng bỏ qua trong string
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inString) {
+        if (ch === stringChar && line[i - 1] !== '\\') inString = false;
+      } else {
+        if (ch === '"' || ch === "'" || ch === '`') { inString = true; stringChar = ch; }
+        else if (ch === '{') braceDepth++;
+        else if (ch === '}') braceDepth--;
+      }
     }
 
     current.push(line);
     currentLength += line.length + 1;
+
+    if (currentLength >= maxCharsPerChunk && braceDepth === 0) {
+      chunks.push(current.join('\n'));
+      current = [];
+      currentLength = 0;
+    }
   }
 
-  if (current.length > 0) {
-    chunks.push(current.join('\n'));
-  }
-
+  if (current.length > 0) chunks.push(current.join('\n'));
   return chunks;
 }
 
@@ -91,7 +153,6 @@ async function callApi(
 
   if (provider === 'gemini') {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    
     for (let attempt = 1; attempt <= retries; attempt++) {
       const response = await fetch(url, {
         method: 'POST',
@@ -101,15 +162,13 @@ async function callApi(
           generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
         }),
       });
-
       if (response.status === 503) {
         if (attempt < retries) {
           await new Promise(r => setTimeout(r, 2000 * attempt));
-          continue; // ← continue nằm đúng trong for loop
+          continue;
         }
         return { success: false, status: 503 };
       }
-
       if (!response.ok) return { success: false, status: response.status };
       const data = await response.json();
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
@@ -200,30 +259,28 @@ export async function aiRenameVariables(
     return { success: false, error: 'Không có code để xử lý!' };
   }
 
-   
-
-  // Tách code thành chunks
+  // Tách code bằng Babel AST
   const MAX_CHARS = 30000;
-const chunks = splitIntoChunks(code, MAX_CHARS);
-
-// LOG debug — xóa sau khi test xong
-console.log('=== CHUNK DEBUG ===');
-console.log(`Tổng ký tự: ${code.length} | ~${Math.ceil(code.length/4)} tokens`);
-console.log(`Ngưỡng mỗi chunk: ${MAX_CHARS} ký tự | ~${Math.ceil(MAX_CHARS/4)} tokens`);
-console.log(`Số chunk: ${chunks.length}`);
-chunks.forEach((c, i) => console.log(`  Chunk ${i+1}: ${c.length} ký tự | ~${Math.ceil(c.length/4)} tokens`));
-console.log('==================');
+  const chunks = splitByAST(code, MAX_CHARS);
   const totalChunks = chunks.length;
   const resultChunks: string[] = [];
 
+  // Log debug
+  console.log('=== CHUNK DEBUG (Babel AST) ===');
+  console.log(`Tổng ký tự: ${code.length} | ~${Math.ceil(code.length / 4)} tokens`);
+  console.log(`Số chunk: ${totalChunks}`);
+  chunks.forEach((c, i) =>
+    console.log(`  Chunk ${i + 1}: ${c.length} ký tự | ~${Math.ceil(c.length / 4)} tokens`)
+  );
+  console.log('==============================');
+
   onProgress?.(
     totalChunks > 1
-      ? `📦 Code lớn (~${Math.ceil(code.length / 4).toLocaleString()} tokens), chia thành ${totalChunks} phần...`
+      ? `📦 Chia thành ${totalChunks} phần (~${Math.ceil(MAX_CHARS / 4).toLocaleString()} tokens/phần)...`
       : `🔍 Đang phân tích... (~${Math.ceil(code.length / 4).toLocaleString()} tokens)`,
   );
 
-  // Xử lý từng chunk
-  let keyIndex = 0; // xoay vòng key
+  let keyIndex = 0;
 
   for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
     const chunk = chunks[chunkIndex];
@@ -233,7 +290,7 @@ console.log('==================');
 
     let chunkDone = false;
     let attempts = 0;
-    const maxAttempts = apiKeys.length * 2; // thử tối đa 2 vòng key
+    const maxAttempts = apiKeys.length * 2;
 
     while (!chunkDone && attempts < maxAttempts) {
       const apiKey = apiKeys[keyIndex % apiKeys.length];
@@ -245,7 +302,13 @@ console.log('==================');
         if (!result.success) {
           if (result.status === 429) {
             onProgress?.(`⏳${keyLabel} Bị rate limit, thử key tiếp...`);
-            keyIndex++; // sang key tiếp
+            keyIndex++;
+            attempts++;
+            continue;
+          }
+          if (result.status === 503) {
+            onProgress?.(`⏳${keyLabel} Server quá tải (503), thử key tiếp...`);
+            keyIndex++;
             attempts++;
             continue;
           }
@@ -260,15 +323,15 @@ console.log('==================');
           continue;
         }
 
-        // Cảnh báo nếu bị cắt dù đã chia chunk
         if (result.finishReason === 'MAX_TOKENS') {
-          onProgress?.(`⚠️ Chunk ${chunkIndex + 1} vẫn bị cắt! Kết quả có thể thiếu.`);
+          onProgress?.(`⚠️ Chunk ${chunkIndex + 1} vẫn bị cắt! Đang thử key khác...`);
+          keyIndex++;
+          attempts++;
+          continue;
         }
 
         resultChunks.push(extractCode(result.text));
         chunkDone = true;
-
-        // Xoay sang key tiếp cho chunk kế để phân tải đều
         keyIndex++;
 
       } catch (err) {
@@ -283,7 +346,6 @@ console.log('==================');
       return { success: false, error: `❌ Chunk ${chunkIndex + 1}/${totalChunks} thất bại sau ${maxAttempts} lần thử!` };
     }
 
-    // Nghỉ 500ms giữa các chunk để tránh RPM
     if (chunkIndex < totalChunks - 1) {
       onProgress?.(`✅ Xong phần ${chunkIndex + 1}/${totalChunks}, tiếp tục...`);
       await new Promise(r => setTimeout(r, 500));
@@ -292,17 +354,6 @@ console.log('==================');
 
   onProgress?.('✅ Hoàn thành!');
   return { success: true, code: resultChunks.join('\n\n') };
-}
-
-async function handleHttpError(response: Response): Promise<AiRenameResult> {
-  const status = response.status;
-  if (status === 429) return { success: false, error: '⏳ Vượt quota! Chờ 1 phút rồi thử lại.' };
-  if (status === 400) return { success: false, error: '❌ Request không hợp lệ (400)!' };
-  if (status === 401) return { success: false, error: '❌ API Key không hợp lệ hoặc hết hạn (401)!' };
-  if (status === 403) return { success: false, error: '🚫 Không có quyền truy cập API (403)!' };
-  const body = await response.json().catch(() => ({}));
-  const msg = (body as { error?: { message?: string } })?.error?.message ?? response.statusText;
-  return { success: false, error: `Lỗi API (${status}): ${msg}` };
 }
 
 function extractCode(text: string): string {
