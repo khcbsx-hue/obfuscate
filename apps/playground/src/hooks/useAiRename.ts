@@ -86,6 +86,7 @@ async function callApi(
   provider: string,
   apiKey: string,
   code: string,
+  retries = 3,
 ): Promise<{ success: boolean; text?: string; status?: number; finishReason?: string }> {
 
   if (provider === 'gemini') {
@@ -98,6 +99,14 @@ async function callApi(
         generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
       }),
     });
+     // 503 → chờ rồi thử lại
+      if (response.status === 503) {
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, 2000 * attempt)); // chờ 2s, 4s, 6s
+          continue;
+        }
+        return { success: false, status: 503 };
+      }
     if (!response.ok) return { success: false, status: response.status };
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
