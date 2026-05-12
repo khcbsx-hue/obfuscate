@@ -195,8 +195,19 @@ export async function aiRenameVariables(
     return { success: false, error: 'Không có code để xử lý!' };
   }
 
+   
+
   // Tách code thành chunks
-  const chunks = splitIntoChunks(code, 170000);
+  const MAX_CHARS = 30000;
+const chunks = splitIntoChunks(code, MAX_CHARS);
+
+// LOG debug — xóa sau khi test xong
+console.log('=== CHUNK DEBUG ===');
+console.log(`Tổng ký tự: ${code.length} | ~${Math.ceil(code.length/4)} tokens`);
+console.log(`Ngưỡng mỗi chunk: ${MAX_CHARS} ký tự | ~${Math.ceil(MAX_CHARS/4)} tokens`);
+console.log(`Số chunk: ${chunks.length}`);
+chunks.forEach((c, i) => console.log(`  Chunk ${i+1}: ${c.length} ký tự | ~${Math.ceil(c.length/4)} tokens`));
+console.log('==================');
   const totalChunks = chunks.length;
   const resultChunks: string[] = [];
 
