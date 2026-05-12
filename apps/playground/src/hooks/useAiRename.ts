@@ -1,3 +1,4 @@
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const PROMPT_TEMPLATE = (code: string) => `
 Bạn là chuyên gia phân tích ngược JavaScript và Google Apps Script.
 Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chuẩn Google Apps Script.
@@ -130,6 +131,12 @@ export async function aiRenameVariables(
 
       while (!isFinished && loopCount < MAX_LOOPS) {
         loopCount++;
+         // --- THÊM ĐOẠN NÀY ---
+        // Nếu là lần chạy viết tiếp (lần 2, 3...), cho code nghỉ 3-5 giây để tránh lỗi 429 Rate Limit
+        if (loopCount > 1) {
+           onProgress?.(`⏳ Chờ 3s để tránh bị block API trước khi nối phần ${loopCount}...`);
+           await sleep(3000); 
+        }         
         let currentChunk = '';
         let finishReason = '';
 
