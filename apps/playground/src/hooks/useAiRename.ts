@@ -1,4 +1,3 @@
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const PROMPT_TEMPLATE = (code: string) => `
 Bạn là chuyên gia phân tích ngược JavaScript và Google Apps Script.
 Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chuẩn Google Apps Script.
@@ -110,7 +109,6 @@ export async function aiRenameVariables(
   }
 
   let lastError = '';
-  
   for (let i = 0; i < apiKeys.length; i++) {
     const apiKey = apiKeys[i];
     const keyLabel = apiKeys.length > 1 ? ` (key ${i + 1}/${apiKeys.length})` : '';
@@ -119,160 +117,97 @@ export async function aiRenameVariables(
     onProgress?.(`Đang phân tích...${keyLabel} (~${estimatedTokens} tokens)`);
 
     try {
-      let isFinished = false;
-      let fullResultText = '';
-      let loopCount = 0;
-      const MAX_LOOPS = 5; // Tránh treo hệ thống nếu AI bị kẹt
-      
-      let currentPromptContent = PROMPT_TEMPLATE(code);
-      let skipToNextKey = false;
-      let stopProcess = false;
-      let errorResult: AiRenameResult | null = null;
+      let resultText = '';
 
-      while (!isFinished && loopCount < MAX_LOOPS) {
-        loopCount++;
-         // --- THÊM ĐOẠN NÀY ---
-        // Nếu là lần chạy viết tiếp (lần 2, 3...), cho code nghỉ 3-5 giây để tránh lỗi 429 Rate Limit
-        if (loopCount > 1) {
-           onProgress?.(`⏳ Chờ 3s để tránh bị block API trước khi nối phần ${loopCount}...`);
-           await sleep(3000); 
-        }         
-        let currentChunk = '';
-        let finishReason = '';
-
-        if (provider === 'gemini') {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: currentPromptContent }] }],
-              // Đặt giới hạn tối đa mà model hỗ trợ
-              generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }, 
-            }),
-          });
-          
-          if (!response.ok) {
-            const err = await handleHttpError(response);
-            lastError = err.error ?? '';
-            if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); skipToNextKey = true; break; }
-            errorResult = err; stopProcess = true; break;
-          }
-          const data = await response.json();
-          currentChunk = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-          finishReason = data?.candidates?.[0]?.finishReason;
+      if (provider === 'gemini') {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: PROMPT_TEMPLATE(code) }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
         }
+        const data = await response.json();
+        resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      }
 
-        else if (provider === 'openai') {
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              messages: [{ role: 'user', content: currentPromptContent }],
-              temperature: 0.1,
-              max_tokens: 16384,
-            }),
-          });
-          if (!response.ok) {
-            const err = await handleHttpError(response);
-            lastError = err.error ?? '';
-            if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); skipToNextKey = true; break; }
-            errorResult = err; stopProcess = true; break;
-          }
-          const data = await response.json();
-          currentChunk = data?.choices?.[0]?.message?.content ?? '';
-          finishReason = data?.choices?.[0]?.finish_reason;
+      else if (provider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+            temperature: 0.1,
+            max_tokens: 16384,
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
         }
+        const data = await response.json();
+        resultText = data?.choices?.[0]?.message?.content ?? '';
+      }
 
-        else if (provider === 'groq') {
-          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
-              messages: [{ role: 'user', content: currentPromptContent }],
-              temperature: 0.1,
-              max_tokens: 32768, // Groq có thể cấu hình cao hơn
-            }),
-          });
-          if (!response.ok) {
-            const err = await handleHttpError(response);
-            lastError = err.error ?? '';
-            if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); skipToNextKey = true; break; }
-            errorResult = err; stopProcess = true; break;
-          }
-          const data = await response.json();
-          currentChunk = data?.choices?.[0]?.message?.content ?? '';
-          finishReason = data?.choices?.[0]?.finish_reason;
+      else if (provider === 'groq') {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+            temperature: 0.1,
+            max_tokens: 32768,
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
         }
+        const data = await response.json();
+        resultText = data?.choices?.[0]?.message?.content ?? '';
+      }
 
-        else if (provider === 'claude') {
-          const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({
-              model: 'claude-haiku-4-5',
-              max_tokens: 8192,
-              messages: [{ role: 'user', content: currentPromptContent }],
-            }),
-          });
-          if (!response.ok) {
-            const err = await handleHttpError(response);
-            lastError = err.error ?? '';
-            if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); skipToNextKey = true; break; }
-            errorResult = err; stopProcess = true; break;
-          }
-          const data = await response.json();
-          currentChunk = data?.content?.[0]?.text ?? '';
-          finishReason = data?.stop_reason;
+      else if (provider === 'claude') {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5',
+            max_tokens: 16384,
+            messages: [{ role: 'user', content: PROMPT_TEMPLATE(code) }],
+          }),
+        });
+        if (!response.ok) {
+          const err = await handleHttpError(response);
+          lastError = err.error ?? '';
+          if (response.status === 429) { onProgress?.(`⏳ Key ${i + 1} bị limit, thử key tiếp...`); continue; }
+          return err;
         }
+        const data = await response.json();
+        resultText = data?.content?.[0]?.text ?? '';
+      }
 
-        if (!currentChunk) {
-          lastError = 'AI không trả về kết quả ở vòng lặp ' + loopCount;
-          skipToNextKey = true;
-          break;
-        }
-
-        // Nối đoạn code vừa sinh ra vào chuỗi kết quả tổng
-        fullResultText += currentChunk;
-
-        // Kiểm tra xem AI có bị cắt ngang do hết token không
-        const isTokenLimit = 
-          finishReason === 'MAX_TOKENS' || 
-          finishReason === 'length' || 
-          finishReason === 'max_tokens';
-
-        if (isTokenLimit) {
-          onProgress?.(`Code dài, đang xử lý tiếp phần ${loopCount + 1}...`);
-          
-          // Lấy 800 ký tự cuối cùng để làm context cho AI viết tiếp
-          const lastPart = fullResultText.slice(-800);
-          currentPromptContent = `Bạn đang làm nhiệm vụ định dạng và đổi tên biến cho đoạn code Google Apps Script. 
-Tuy nhiên, đoạn code bạn đang xuất ra bị ngắt quãng giữa chừng do giới hạn bộ nhớ API. 
-Đây là đoạn cuối cùng bạn vừa viết ra:
-
-...
-${lastPart}
-...
-
-Nhiệm vụ của bạn: Hãy VIẾT TIẾP phần mã còn lại từ đúng điểm ngắt này. 
-- TUYỆT ĐỐI KHÔNG viết lại những gì đã xuất hiện ở trên.
-- TUYỆT ĐỐI KHÔNG dùng dấu markdown (\`\`\`javascript) ở đầu câu để tránh lỗi khi nối chuỗi.
-- Chỉ xuất đoạn mã nguồn tiếp nối.`;
-
-        } else {
-          // Hoàn thành hoàn toàn
-          isFinished = true;
-        }
-      } // Kết thúc vòng lặp while
-
-      // Xử lý luồng sau khi thoát while
-      if (skipToNextKey) continue; // Chuyển sang key API tiếp theo
-      if (stopProcess && errorResult) return errorResult; // Báo lỗi ngay lập tức
+      if (!resultText) {
+        lastError = 'AI không trả về kết quả. Thử lại sau!';
+        continue;
+      }
 
       onProgress?.('✅ Hoàn thành!');
-      return { success: true, code: extractCode(fullResultText) };
+      return { success: true, code: extractCode(resultText) };
 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -296,17 +231,9 @@ async function handleHttpError(response: Response): Promise<AiRenameResult> {
 }
 
 function extractCode(text: string): string {
-  // 1. Nếu AI trả về nguyên một khối có bọc markdown
-  // Tìm khối markdown đầu tiên và cuối cùng để trích xuất (loại bỏ text luyên thuyên ngoài rìa)
-  const codeBlockMatch = text.match(/```(?:javascript|js)?\n?([\s\S]*?)```$/);
-  let cleanedText = codeBlockMatch ? codeBlockMatch[1] : text;
-
-  // 2. Vì nối chuỗi từ nhiều vòng lặp, có thể có các thẻ markdown lọt vào giữa code.
-  // Quét và xóa toàn bộ các thẻ markdown còn sót lại trong ruột.
-  cleanedText = cleanedText.replace(/```(javascript|js)?\n?/g, '');
-  cleanedText = cleanedText.replace(/```/g, '');
-  
-  return cleanedText.trim();
+  const match = text.match(/```(?:javascript|js)?\n?([\s\S]*?)```/);
+  if (match) return match[1].trim();
+  return text.trim();
 }
 
 export function saveApiKey(provider: string, key: string) {
