@@ -91,27 +91,32 @@ async function callApi(
 
   if (provider === 'gemini') {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: PROMPT_TEMPLATE(code) }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
-      }),
-    });
-     // 503 → chờ rồi thử lại
+    
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: PROMPT_TEMPLATE(code) }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
+        }),
+      });
+
       if (response.status === 503) {
         if (attempt < retries) {
-          await new Promise(r => setTimeout(r, 2000 * attempt)); // chờ 2s, 4s, 6s
-          continue;
+          await new Promise(r => setTimeout(r, 2000 * attempt));
+          continue; // ← continue nằm đúng trong for loop
         }
         return { success: false, status: 503 };
       }
-    if (!response.ok) return { success: false, status: response.status };
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const finishReason = data?.candidates?.[0]?.finishReason ?? 'STOP';
-    return { success: true, text, finishReason };
+
+      if (!response.ok) return { success: false, status: response.status };
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      const finishReason = data?.candidates?.[0]?.finishReason ?? 'STOP';
+      return { success: true, text, finishReason };
+    }
+    return { success: false, status: 503 };
   }
 
   if (provider === 'openai') {
