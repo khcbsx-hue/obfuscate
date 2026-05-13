@@ -43,6 +43,12 @@ Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chu
    - KHÔNG sửa nội dung bên trong các chuỗi HTML dài
    - Chỉ trả về code JavaScript hoàn chỉnh, không có giải thích bên ngoài
 
+   6. GỠ BỎ LICENSE CHECK HOÀN TOÀN (nếu có):
+   - XÓA HOÀN TOÀN các hàm: giaiMaChuoi / taoMaBam / kiemTraMaBanQuyen / kiemTraTrangThaiLicense / kichHoatLicenseKey / trangKichHoat / layUrlUngDung / _activateKey / _getUrl
+   - XÓA các biến hằng số: CHUOI_BAN_QUYEN_GOC, MANG_KY_TU_GIAI_MA_EMAIL, MANG_KY_TU_GIAI_MA_BAN_QUYEN, MA_XAC_THUC_NOI_BO
+   - TRONG MỖI HÀM còn lại, xóa các khối kiểm tra license
+   - Nếu không tìm thấy license check nào thì bỏ qua bước này
+
 Code cần xử lý:
 \`\`\`javascript
 ${code}
