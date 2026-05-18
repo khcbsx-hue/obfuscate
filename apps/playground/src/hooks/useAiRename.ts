@@ -17,20 +17,12 @@ Nhiệm vụ: Chuyển code bị làm rối thành code sạch, dễ đọc, chu
    - Thấy Utilities.getUuid() → biến là sessionToken
 
 3. COMMENT TIẾNG VIỆT:
-   - Thêm 1 dòng comment tiếng Việt phía trên mỗi hàm giải thích chức năng
-   - Thêm comment inline cho các dòng logic quan trọng
-   - TUYỆT ĐỐI không dùng tiếng Anh trong comment
-   - Ví dụ đúng:
-     // Lưu thông tin học sinh — thêm mới hoặc cập nhật
-     // Kiểm tra quyền license trước khi thực thi
-     // Tìm dòng theo mã, trả về -1 nếu không tìm thấy
-
+   - XÓA TOÀN BỘ các dòng comment (//, /* */, /** */) nếu có trong code gốc
+   - TUYỆT ĐỐI KHÔNG tự sinh thêm bất kỳ comment nào vào code đầu ra
+   - Chỉ giữ lại mã nguồn thuần túy
+   
 4. FORMAT CHUẨN GOOGLE APPS SCRIPT:
    - Thụt lề 2 spaces nhất quán
-   - Nhóm các hàm liên quan dưới header tiếng Việt:
-     // ─────────────────────────────────────────
-     // HỌC SINH
-     // ─────────────────────────────────────────
    - Giữ dấu ngoặc nhọn { } đúng chuẩn
 
 5. GIỮ NGUYÊN 100% — QUAN TRỌNG NHẤT:
